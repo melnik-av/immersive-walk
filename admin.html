@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Админ-панель</title>
+    <style>
+        body { font-family: Arial; max-width: 600px; margin: 50px auto; padding: 20px; background: #1a1a2e; color: white; }
+        input, button { padding: 12px; margin: 8px 0; width: 100%; box-sizing: border-box; border-radius: 8px; border: none; }
+        input { background: rgba(255,255,255,0.1); color: white; }
+        button { background: #e94560; color: white; cursor: pointer; font-weight: 600; }
+        button:hover { background: #d63851; }
+        #status { margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.1); border-radius: 8px; min-height: 20px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>🎛️ Админ-панель</h1>
+    
+    <div id="loginForm">
+        <h2>Вход</h2>
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Пароль">
+        <button onclick="login()">Войти</button>
+    </div>
+    
+    <div id="adminPanel" class="hidden">
+        <h2>Добавить трек</h2>
+        <input type="text" id="title" placeholder="Название трека">
+        <input type="number" id="price" placeholder="Цена (руб)" value="500">
+        <input type="number" id="days" placeholder="Дней доступа" value="7">
+        <input type="file" id="mp3file" accept="audio/mp3,audio/mpeg">
+        <button onclick="uploadTrack()">Загрузить трек</button>
+        <div id="status"></div>
+        
+        <h2 style="margin-top: 40px;">Список треков</h2>
+        <div id="tracksList"></div>
+    </div>
+
+    <script type="module">
+        import { supabase } from './supabase-config.js';
+
+        // Вход
+        window.login = async () => {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const { error } = await supabase.auth.signInWithPassword({ email, password });
+            if (error) alert('Ошибка: ' + error.message);
+        };
+
+        // Проверка авторизации
+        supabase.auth.onAuthStateChange((event, session) => {
+            if (session) {
+                document.getElementById('loginForm').classList.add('hidden');
+                document.getElementById('adminPanel').classList.remove('hidden');
+                loadTracks();
+            }
+        });
+
+        // Загрузка треков
+        async function loadTracks() {
+            const { data: tracks } = await supabase.from('tracks').select('*').order('created_at', { ascending: false });
+            const list = document.getElementById('tracksList');
+            list.innerHTML = tracks.map(t => `
+                <div style="padding: 10px; background: rgba(255,255,255,0.05); margin: 5px 0; border-radius: 8px;">
+                    <strong>${t.title}</strong> — ${t.price} руб, ${t.duration_days} дней
+                    <button onclick="toggleTrack('${t.id}', ${!t.active})" style="margin-left: 10px; padding: 5px 10px; width: auto;">
+                        ${t.active ? 'Отключить' : 'Включить'}
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Переключение активности трека
+        window.toggleTrack = async (id, active) => {
+            await supabase.from('tracks').update({ active }).eq('id', id);
+            loadTracks();
+        };
+
+        // Загрузка трека
+        window.uploadTrack = async () => {
+            const status = document.getElementById('status');
+            const title = document.getElementById('title').value;
+            const price = parseInt(document.getElementById('price').value);
+            const days = parseInt(document.getElementById('days').value);
+            const file = document.getElementById('mp3file').files[0];
+
+            if (!file || !title) { alert('Заполните название и выберите файл'); return; }
+
+            status.textContent = '⏳ Загрузка файла...';
+
+            try {
+                // Загрузка MP3 в Storage
+                const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`;
+                const { error: uploadError } = await supabase.storage
+                    .from('tracks')
+                    .upload(fileName, file);
+                
+                if (uploadError) throw uploadError;
+
+                // Получение публичной ссылки
+                const { data: { publicUrl } } = supabase.storage
+                    .from('tracks')
+                    .getPublicUrl(fileName);
+
+                // Добавление записи в базу
+                const { error: dbError } = await supabase.from('tracks').insert({
+                    title,
+                    price,
+                    duration_days: days,
+                    file_url: publicUrl,
+                    active: true
+                });
+
+                if (dbError) throw dbError;
+
+                status.textContent = '✅ Трек добавлен!';
+                document.getElementById('title').value = '';
+                document.getElementById('mp3file').value = '';
+                loadTracks();
+            } catch (e) {
+                status.textContent = '❌ Ошибка: ' + e.message;
+            }
+        };
+    </script>
+</body>
+</html>

@@ -16,7 +16,7 @@
             min-height: 100vh;
         }
         h1 { margin-top: 0; }
-        input, button { 
+        input, textarea, button { 
             padding: 12px; 
             margin: 8px 0; 
             width: 100%; 
@@ -24,12 +24,17 @@
             border-radius: 8px; 
             border: none; 
             font-size: 16px;
+            font-family: inherit;
         }
-        input { 
+        input, textarea { 
             background: rgba(255,255,255,0.1); 
             color: white; 
         }
-        input::placeholder { color: rgba(255,255,255,0.5); }
+        input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.5); }
+        textarea { 
+            resize: vertical; 
+            min-height: 80px; 
+        }
         button { 
             background: #e94560; 
             color: white; 
@@ -79,9 +84,16 @@
             font-size: 18px;
             margin-bottom: 8px; 
         }
+        .track-description {
+            font-size: 14px;
+            color: #a0a0b0;
+            margin-bottom: 8px;
+            font-style: italic;
+            line-height: 1.5;
+        }
         .track-meta { 
             font-size: 14px; 
-            color: #a0a0b0;
+            color: #6c6c7d;
             margin-bottom: 8px;
         }
         .track-link { 
@@ -104,10 +116,16 @@
         .btn-copy:hover { background: #45a049; }
         .btn-delete { background: #8b0000; }
         .btn-delete:hover { background: #a00000; }
+        .field-label {
+            font-size: 14px;
+            color: #a0a0b0;
+            margin-bottom: 5px;
+            display: block;
+        }
     </style>
 </head>
 <body>
-    <h1>🎛️ Админ-панель</h1>
+    <h1>️ Админ-панель</h1>
     
     <div id="loginForm">
         <h2>Вход</h2>
@@ -127,10 +145,22 @@
         </div>
         
         <h2>Добавить трек</h2>
-        <input type="text" id="title" placeholder="Название трека">
-        <input type="number" id="price" placeholder="Цена (руб)" value="500">
-        <input type="number" id="days" placeholder="Дней доступа" value="7">
+        
+        <label class="field-label">Название трека *</label>
+        <input type="text" id="title" placeholder="Например: Прогулка по старому городу">
+        
+        <label class="field-label">Описание (аннотация)</label>
+        <textarea id="description" placeholder="2-3 предложения о прогулке. Например: Погрузитесь в атмосферу старого города. Вы услышите истории о знаменитых архитекторах и узнаете тайны старинных улиц."></textarea>
+        
+        <label class="field-label">Цена (руб)</label>
+        <input type="number" id="price" placeholder="500" value="500">
+        
+        <label class="field-label">Дней доступа</label>
+        <input type="number" id="days" placeholder="7" value="7">
+        
+        <label class="field-label">Аудиофайл (MP3) *</label>
         <input type="file" id="mp3file" accept="audio/mp3,audio/mpeg">
+        
         <button onclick="uploadTrack()" id="uploadBtn">Загрузить трек</button>
         <div id="status"></div>
         
@@ -197,15 +227,19 @@
             
             list.innerHTML = tracks.map(t => {
                 const trackLink = `${playerUrl}?track=${t.id}`;
+                const descriptionHtml = t.description 
+                    ? `<div class="track-description">"${t.description}"</div>` 
+                    : '';
                 
                 return `
                     <div class="track-item">
                         <div class="track-title">${t.title}</div>
+                        ${descriptionHtml}
                         <div class="track-meta">${t.price} руб, ${t.duration_days} дней</div>
                         <div class="track-link">${trackLink}</div>
                         <div class="track-actions">
                             <button class="btn-copy" onclick="copyLink('${trackLink}', '${t.title.replace(/'/g, "\\'")}')">
-                                 Копировать
+                                📋 Копировать
                             </button>
                             <button onclick="toggleTrack('${t.id}', ${!t.active})">
                                 ${t.active ? 'Отключить' : 'Включить'}
@@ -277,6 +311,7 @@
             const status = document.getElementById('status');
             const uploadBtn = document.getElementById('uploadBtn');
             const title = document.getElementById('title').value.trim();
+            const description = document.getElementById('description').value.trim();
             const price = parseInt(document.getElementById('price').value);
             const days = parseInt(document.getElementById('days').value);
             const file = document.getElementById('mp3file').files[0];
@@ -292,7 +327,7 @@
             try {
                 // Уникальное имя файла
                 const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${file.name.replace(/\s/g, '_').replace(/[^a-zA-Z0-9._-]/g, '')}`;
-                console.log('📤 Загрузка файла:', fileName);
+                console.log(' Загрузка файла:', fileName);
                 
                 // Загружаем в Storage
                 const { error: uploadError, data } = await supabase.storage
@@ -321,6 +356,7 @@
                     .from('tracks')
                     .insert({
                         title,
+                        description: description || null,
                         price,
                         duration_days: days,
                         file_url: publicUrl,
@@ -337,6 +373,7 @@
                 
                 status.textContent = '✅ Трек добавлен!';
                 document.getElementById('title').value = '';
+                document.getElementById('description').value = '';
                 document.getElementById('mp3file').value = '';
                 loadTracks();
             } catch (e) {

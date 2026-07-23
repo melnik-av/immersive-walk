@@ -115,6 +115,12 @@
         }
         .btn-copy { background: #4CAF50; }
         .btn-copy:hover { background: #45a049; }
+        .btn-edit { background: #FF9800; }
+        .btn-edit:hover { background: #F57C00; }
+        .btn-save { background: #2196F3; }
+        .btn-save:hover { background: #1976D2; }
+        .btn-cancel { background: #757575; }
+        .btn-cancel:hover { background: #616161; }
         .btn-delete { background: #8b0000; }
         .btn-delete:hover { background: #a00000; }
         .field-label {
@@ -167,10 +173,36 @@
         }
         .btn-qr-download { background: #2196F3; }
         .btn-qr-download:hover { background: #1976D2; }
+        
+        /* Стили для редактирования */
+        .edit-form {
+            background: rgba(255,255,255,0.08);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 15px 0;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .edit-form input,
+        .edit-form textarea {
+            background: rgba(255,255,255,0.15);
+            margin-bottom: 12px;
+        }
+        .edit-form .field-label {
+            color: #d0d0e0;
+            font-weight: 600;
+        }
+        .edit-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .edit-actions button {
+            flex: 1;
+        }
     </style>
 </head>
 <body>
-    <h1>️ Админ-панель</h1>
+    <h1>🎛️ Админ-панель</h1>
     
     <div id="loginForm">
         <h2>Вход</h2>
@@ -225,7 +257,7 @@
             
             const { error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) {
-                errorEl.textContent = ' ' + error.message;
+                errorEl.textContent = '❌ ' + error.message;
             }
         };
 
@@ -250,7 +282,7 @@
             }
         });
 
-        // Функция генерации URL QR-кода через внешний API
+        // Функция генерации URL QR-кода
         function getQRUrl(text, size = 200) {
             return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}&margin=10&color=000000&bgcolor=ffffff`;
         }
@@ -283,7 +315,7 @@
                 const qrUrl = getQRUrl(trackLink, 200);
                 
                 return `
-                    <div class="track-item">
+                    <div class="track-item" id="track-${t.id}">
                         <div class="track-title">${t.title}</div>
                         ${descriptionHtml}
                         <div class="track-meta">${t.price} руб, ${t.duration_days} дней</div>
@@ -293,7 +325,7 @@
                             <div class="qr-label">📱 QR-код для быстрого доступа</div>
                             <div class="qr-wrapper">
                                 <div class="qr-code-container">
-                                    <img src="${qrUrl}" alt="QR-код" id="qr-img-${t.id}" crossorigin="anonymous">
+                                    <img src="${qrUrl}" alt="QR-код" crossorigin="anonymous">
                                 </div>
                                 <div class="qr-actions">
                                     <button class="btn-qr-download" onclick="downloadQR('${qrUrl}', '${t.title.replace(/'/g, "\\'")}')">
@@ -307,6 +339,9 @@
                         </div>
                         
                         <div class="track-actions">
+                            <button class="btn-edit" onclick="showEditForm('${t.id}', '${t.title.replace(/'/g, "\\'")}', '${(t.description || '').replace(/'/g, "\\'")}', ${t.price}, ${t.duration_days})">
+                                ✏️ Редактировать
+                            </button>
                             <button onclick="toggleTrack('${t.id}', ${!t.active})">
                                 ${t.active ? 'Отключить' : 'Включить'}
                             </button>
@@ -316,6 +351,83 @@
                 `;
             }).join('');
         }
+
+        // Показать форму редактирования
+        window.showEditForm = (id, title, description, price, days) => {
+            const trackItem = document.getElementById(`track-${id}`);
+            const existingForm = trackItem.querySelector('.edit-form');
+            
+            if (existingForm) {
+                existingForm.remove();
+                return;
+            }
+            
+            const form = document.createElement('div');
+            form.className = 'edit-form';
+            form.innerHTML = `
+                <label class="field-label">Название трека</label>
+                <input type="text" id="edit-title-${id}" value="${title}">
+                
+                <label class="field-label">Описание</label>
+                <textarea id="edit-description-${id}">${description}</textarea>
+                
+                <label class="field-label">Цена (руб)</label>
+                <input type="number" id="edit-price-${id}" value="${price}">
+                
+                <label class="field-label">Дней доступа</label>
+                <input type="number" id="edit-days-${id}" value="${days}">
+                
+                <div class="edit-actions">
+                    <button class="btn-save" onclick="saveTrack('${id}')">💾 Сохранить</button>
+                    <button class="btn-cancel" onclick="loadTracks()">Отмена</button>
+                </div>
+            `;
+            
+            trackItem.appendChild(form);
+        };
+
+        // Сохранить изменения
+        window.saveTrack = async (id) => {
+            const title = document.getElementById(`edit-title-${id}`).value.trim();
+            const description = document.getElementById(`edit-description-${id}`).value.trim();
+            const price = parseInt(document.getElementById(`edit-price-${id}`).value);
+            const days = parseInt(document.getElementById(`edit-days-${id}`).value);
+            
+            if (!title) {
+                alert('Название обязательно');
+                return;
+            }
+            
+            const status = document.getElementById('status');
+            status.textContent = '⏳ Сохранение...';
+            
+            try {
+                const { error } = await supabase
+                    .from('tracks')
+                    .update({
+                        title,
+                        description: description || null,
+                        price,
+                        duration_days: days
+                    })
+                    .eq('id', id);
+                
+                if (error) throw error;
+                
+                status.textContent = '✅ Изменения сохранены!';
+                status.style.background = 'rgba(76, 175, 80, 0.2)';
+                
+                setTimeout(() => {
+                    status.textContent = '';
+                    status.style.background = 'rgba(255,255,255,0.1)';
+                }, 3000);
+                
+                loadTracks();
+            } catch (e) {
+                status.textContent = '❌ Ошибка: ' + e.message;
+                console.error('Ошибка сохранения:', e);
+            }
+        };
 
         // Копирование ссылки
         window.copyLink = async (link, title) => {
@@ -357,7 +469,6 @@
                 window.URL.revokeObjectURL(url);
             } catch (error) {
                 console.error('Ошибка скачивания:', error);
-                // Fallback: открываем в новой вкладке
                 window.open(qrUrl, '_blank');
             }
         };
@@ -407,7 +518,7 @@
                 return; 
             }
 
-            status.textContent = ' Загрузка файла...';
+            status.textContent = '⏳ Загрузка файла...';
             uploadBtn.disabled = true;
 
             try {

@@ -1,6 +1,6 @@
 import { supabase } from './supabase-config.js';
 
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 
 let audio = null;
 let isPlaying = false;
@@ -34,17 +34,29 @@ document.addEventListener('visibilitychange', async () => {
     }
 });
 
+// Получение ID трека из URL
+function getTrackIdFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('track');
+}
+
 // Загрузка трека
 async function loadTrack() {
     try {
         console.log('Подключение к Supabase...');
         statusEl.textContent = 'Подключение к Supabase...';
         
-        const { data, error } = await supabase
-            .from('tracks')
-            .select('*')
-            .eq('active', true)
-            .limit(1);
+        const trackId = getTrackIdFromUrl();
+        let query = supabase.from('tracks').select('*').eq('active', true);
+        
+        if (trackId) {
+            console.log('Загрузка трека по ID:', trackId);
+            query = query.eq('id', trackId);
+        }
+        
+        query = query.limit(1);
+        
+        const { data, error } = await query;
 
         if (error) {
             console.error('❌ Ошибка базы данных:', error);
@@ -54,7 +66,9 @@ async function loadTrack() {
 
         if (!data || data.length === 0) {
             console.log('️ Нет активных треков');
-            statusEl.textContent = '⚠️ Нет доступных треков';
+            statusEl.textContent = trackId 
+                ? '❌ Трек не найден или недоступен' 
+                : '⚠️ Нет доступных треков';
             return;
         }
 
@@ -68,8 +82,8 @@ async function loadTrack() {
             return;
         }
         
-        console.log(' URL файла:', track.file_url);
-        statusEl.textContent = '⏳ Скачивание трека...';
+        console.log('🎵 URL файла:', track.file_url);
+        statusEl.textContent = ' Скачивание трека...';
         await cacheAndPlay(track.file_url);
         
     } catch (error) {
@@ -86,7 +100,7 @@ async function cacheAndPlay(fileUrl) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        const cache = await caches.open('audio-walk-v5');
+        const cache = await caches.open('audio-walk-v6');
         await cache.put(fileUrl, response.clone());
         
         localStorage.setItem('audioCacheDate', Date.now().toString());

@@ -38,9 +38,13 @@ async function init() {
         titleEl.textContent = track.title || 'Аудиопрогулка';
         statusEl.textContent = 'Загрузка аудио...';
         
+        // Добавляем timestamp чтобы избежать кэширования
+        const fileUrl = track.file_url + '?t=' + Date.now();
+        console.log('🎵 URL с timestamp:', fileUrl);
+        
         // Проверяем файл
         console.log('🔍 Проверка файла...');
-        const testResponse = await fetch(track.file_url, { method: 'HEAD' });
+        const testResponse = await fetch(fileUrl, { method: 'HEAD' });
         console.log('📊 Статус:', testResponse.status);
         console.log('📊 Content-Type:', testResponse.headers.get('content-type'));
         
@@ -49,8 +53,8 @@ async function init() {
         }
         
         // Создаем аудио
-        console.log(' Создание Audio объекта...');
-        audio = new Audio(track.file_url);
+        console.log('🎵 Создание Audio объекта...');
+        audio = new Audio(fileUrl);
         
         audio.addEventListener('canplay', () => {
             console.log('✅ Аудио готово');

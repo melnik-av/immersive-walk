@@ -10,17 +10,18 @@ const descriptionText = document.getElementById('trackDescription');
 
 let audio = null;
 let isPlaying = false;
+let currentTrackId = null;
+let playCounted = false; // Чтобы не считать одно прослушивание дважды
 
 async function init() {
-    console.log(' Загрузка трека из Supabase...');
+    console.log('📡 Загрузка трека из Supabase...');
     statusEl.textContent = 'Подключение...';
     
     try {
-        // Получаем ID трека из URL
         const params = new URLSearchParams(window.location.search);
         const trackId = params.get('track');
         
-        console.log('📍 Track ID из URL:', trackId);
+        console.log(' Track ID из URL:', trackId);
         
         let query = supabase.from('tracks').select('*').eq('active', true);
         
@@ -31,7 +32,7 @@ async function init() {
         const { data, error } = await query.limit(1);
         
         if (error) {
-            console.error('❌ Ошибка Supabase:', error);
+            console.error(' Ошибка Supabase:', error);
             statusEl.textContent = 'Ошибка БД: ' + error.message;
             return;
         }
@@ -42,32 +43,28 @@ async function init() {
         }
         
         const track = data[0];
+        currentTrackId = track.id;
         console.log('✅ Трек найден:');
         console.log('  ID:', track.id);
         console.log('  Название:', track.title);
         console.log('  Описание:', track.description);
         console.log('  URL:', track.file_url);
+        console.log('  Прослушиваний:', track.play_count || 0);
         
         titleEl.textContent = track.title || 'Аудиопрогулка';
         
-        // Показываем аннотацию если есть
         if (track.description && track.description.trim()) {
             descriptionText.textContent = track.description;
             descriptionBlock.style.display = 'block';
-            console.log('📝 Аннотация показана');
         } else {
             descriptionBlock.style.display = 'none';
-            console.log('️ Аннотация отсутствует');
         }
         
         statusEl.textContent = 'Загрузка аудио...';
         
-        // Добавляем timestamp чтобы избежать кэширования
         const fileUrl = track.file_url + '?t=' + Date.now();
         console.log('🎵 Финальный URL:', fileUrl);
         
-        // Создаем аудио
-        console.log('🎵 Создание Audio объекта...');
         audio = new Audio(fileUrl);
         
         audio.addEventListener('canplay', () => {
@@ -80,7 +77,6 @@ async function init() {
         audio.addEventListener('error', (e) => {
             console.error('❌ Ошибка аудио:', e);
             console.error('Код:', audio.error?.code);
-            console.error('Сообщение:', audio.error?.message);
             
             let errorMsg = 'Ошибка загрузки';
             if (audio.error?.code === 1) errorMsg = 'Ошибка сети';
@@ -97,12 +93,34 @@ async function init() {
             playBtn.textContent = '▶ Играть сначала';
         });
         
-        console.log('🔄 Начинаем загрузку аудио...');
         audio.load();
         
     } catch (error) {
         console.error('💥 Критическая ошибка:', error);
         statusEl.textContent = '❌ ' + error.message;
+    }
+}
+
+// Увеличение счетчика прослушиваний
+async function incrementPlayCount() {
+    if (!currentTrackId || playCounted) return;
+    
+    try {
+        console.log(' Увеличиваем счетчик прослушиваний...');
+        
+        // Вызываем RPC функцию
+        const { error } = await supabase.rpc('increment_play_count', {
+            track_id: currentTrackId
+        });
+        
+        if (error) {
+            console.error('❌ Ошибка увеличения счетчика:', error);
+        } else {
+            console.log('✅ Счетчик увеличен');
+            playCounted = true; // Помечаем что уже посчитали
+        }
+    } catch (e) {
+        console.error('💥 Ошибка статистики:', e);
     }
 }
 
@@ -117,19 +135,20 @@ playBtn.addEventListener('click', async () => {
     }
     
     if (isPlaying) {
-        // Пауза
         console.log('⏸ Пауза');
         audio.pause();
         playBtn.textContent = '▶ Продолжить';
         isPlaying = false;
     } else {
-        // Воспроизведение
         console.log('▶ Запуск воспроизведения...');
         try {
             await audio.play();
-            playBtn.textContent = '⏸ Пауза';
+            playBtn.textContent = ' Пауза';
             isPlaying = true;
             console.log('✅ Воспроизведение началось');
+            
+            // Увеличиваем счетчик при первом запуске
+            await incrementPlayCount();
         } catch (e) {
             console.error('❌ Ошибка play():', e);
             statusEl.textContent = '❌ Нажмите ещё раз';
@@ -137,6 +156,5 @@ playBtn.addEventListener('click', async () => {
     }
 });
 
-// Запуск приложения
 console.log('🚀 Инициализация...');
 init();

@@ -5,12 +5,14 @@ console.log('🚀 ПРИЛОЖЕНИЕ ЗАПУСКАЕТСЯ');
 const playBtn = document.getElementById('playBtn');
 const statusEl = document.getElementById('status');
 const titleEl = document.getElementById('trackTitle');
+const descriptionBlock = document.getElementById('descriptionBlock');
+const descriptionText = document.getElementById('trackDescription');
 
 let audio = null;
 let isPlaying = false;
 
 async function init() {
-    console.log('📡 Загрузка трека из Supabase...');
+    console.log(' Загрузка трека из Supabase...');
     statusEl.textContent = 'Подключение...';
     
     try {
@@ -43,9 +45,21 @@ async function init() {
         console.log('✅ Трек найден:');
         console.log('  ID:', track.id);
         console.log('  Название:', track.title);
+        console.log('  Описание:', track.description);
         console.log('  URL:', track.file_url);
         
         titleEl.textContent = track.title || 'Аудиопрогулка';
+        
+        // Показываем аннотацию если есть
+        if (track.description && track.description.trim()) {
+            descriptionText.textContent = track.description;
+            descriptionBlock.style.display = 'block';
+            console.log('📝 Аннотация показана');
+        } else {
+            descriptionBlock.style.display = 'none';
+            console.log('️ Аннотация отсутствует');
+        }
+        
         statusEl.textContent = 'Загрузка аудио...';
         
         // Добавляем timestamp чтобы избежать кэширования
@@ -78,7 +92,7 @@ async function init() {
         });
         
         audio.addEventListener('ended', () => {
-            console.log('⏹️ Воспроизведение завершено');
+            console.log('️ Воспроизведение завершено');
             isPlaying = false;
             playBtn.textContent = '▶ Играть сначала';
         });
@@ -98,13 +112,13 @@ playBtn.addEventListener('click', async () => {
     
     if (!audio) {
         console.error('❌ Audio объект не создан');
-        statusEl.textContent = ' Аудио не загружено';
+        statusEl.textContent = '❌ Аудио не загружено';
         return;
     }
     
     if (isPlaying) {
         // Пауза
-        console.log(' Пауза');
+        console.log('⏸ Пауза');
         audio.pause();
         playBtn.textContent = '▶ Продолжить';
         isPlaying = false;
@@ -113,7 +127,7 @@ playBtn.addEventListener('click', async () => {
         console.log('▶ Запуск воспроизведения...');
         try {
             await audio.play();
-            playBtn.textContent = ' Пауза';
+            playBtn.textContent = '⏸ Пауза';
             isPlaying = true;
             console.log('✅ Воспроизведение началось');
         } catch (e) {
@@ -124,5 +138,5 @@ playBtn.addEventListener('click', async () => {
 });
 
 // Запуск приложения
-console.log(' Инициализация...');
+console.log('🚀 Инициализация...');
 init();

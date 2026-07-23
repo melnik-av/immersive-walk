@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Админ-панель</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/qrcode.min.js"></script>
     <style>
         * { box-sizing: border-box; }
         body { 
@@ -78,6 +79,8 @@
             background: rgba(255,255,255,0.05); 
             margin: 10px 0; 
             border-radius: 8px;
+            display: flex;
+            flex-direction: column;
         }
         .track-title { 
             font-weight: 600; 
@@ -122,10 +125,35 @@
             margin-bottom: 5px;
             display: block;
         }
+        .qr-container {
+            margin: 15px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        .qr-label {
+            font-size: 12px;
+            color: #a0a0b0;
+        }
+        .qr-code {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .qr-actions {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+        .btn-qr {
+            flex: 1;
+            min-width: 100px;
+        }
     </style>
 </head>
 <body>
-    <h1>️ Админ-панель</h1>
+    <h1>🎛️ Админ-панель</h1>
     
     <div id="loginForm">
         <h2>Вход</h2>
@@ -237,6 +265,20 @@
                         ${descriptionHtml}
                         <div class="track-meta">${t.price} руб, ${t.duration_days} дней</div>
                         <div class="track-link">${trackLink}</div>
+                        
+                        <div class="qr-container">
+                            <div class="qr-label">QR-код для быстрого доступа</div>
+                            <div class="qr-code" id="qr-${t.id}"></div>
+                            <div class="qr-actions">
+                                <button class="btn-qr" onclick="copyLink('${trackLink}', '${t.title.replace(/'/g, "\\'")}')">
+                                    📋 Копировать
+                                </button>
+                                <button class="btn-qr" onclick="downloadQR('${trackLink}')">
+                                    📥 Скачать
+                                </button>
+                            </div>
+                        </div>
+                        
                         <div class="track-actions">
                             <button class="btn-copy" onclick="copyLink('${trackLink}', '${t.title.replace(/'/g, "\\'")}')">
                                 📋 Копировать
@@ -249,6 +291,21 @@
                     </div>
                 `;
             }).join('');
+            
+            // Генерируем QR-коды
+            tracks.forEach(t => {
+                const qrContainer = document.getElementById(`qr-${t.id}`);
+                if (qrContainer) {
+                    new QRCode(qrContainer, {
+                        text: `${playerUrl}?track=${t.id}`,
+                        width: 128,
+                        height: 128,
+                        colorDark: "#000000",
+                        colorLight: "#ffffff",
+                        correctLevel: QRCode.CorrectLevel.H
+                    });
+                }
+            });
         }
 
         // Копирование ссылки
@@ -274,6 +331,25 @@
                 
                 alert('Ссылка скопирована!');
             }
+        };
+
+        // Скачать QR-код
+        window.downloadQR = (trackLink) => {
+            const canvas = document.createElement('canvas');
+            new QRCode(canvas, {
+                text: trackLink,
+                width: 256,
+                height: 256,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            
+            const dataUrl = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = 'qrcode.png';
+            link.href = dataUrl;
+            link.click();
         };
 
         // Переключение активности
@@ -327,7 +403,7 @@
             try {
                 // Уникальное имя файла
                 const fileName = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}_${file.name.replace(/\s/g, '_').replace(/[^a-zA-Z0-9._-]/g, '')}`;
-                console.log(' Загрузка файла:', fileName);
+                console.log('📤 Загрузка файла:', fileName);
                 
                 // Загружаем в Storage
                 const { error: uploadError, data } = await supabase.storage

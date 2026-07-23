@@ -14,11 +14,19 @@ async function init() {
     statusEl.textContent = 'Подключение...';
     
     try {
-        const { data, error } = await supabase
-            .from('tracks')
-            .select('*')
-            .eq('active', true)
-            .limit(1);
+        // Получаем ID трека из URL
+        const params = new URLSearchParams(window.location.search);
+        const trackId = params.get('track');
+        
+        console.log('📍 Track ID из URL:', trackId);
+        
+        let query = supabase.from('tracks').select('*').eq('active', true);
+        
+        if (trackId) {
+            query = query.eq('id', trackId);
+        }
+        
+        const { data, error } = await query.limit(1);
         
         if (error) {
             console.error('❌ Ошибка Supabase:', error);
@@ -32,32 +40,24 @@ async function init() {
         }
         
         const track = data[0];
-        console.log('✅ Трек найден:', track);
-        console.log(' URL:', track.file_url);
+        console.log('✅ Трек найден:');
+        console.log('  ID:', track.id);
+        console.log('  Название:', track.title);
+        console.log('  URL:', track.file_url);
         
         titleEl.textContent = track.title || 'Аудиопрогулка';
         statusEl.textContent = 'Загрузка аудио...';
         
         // Добавляем timestamp чтобы избежать кэширования
         const fileUrl = track.file_url + '?t=' + Date.now();
-        console.log('🎵 URL с timestamp:', fileUrl);
-        
-        // Проверяем файл
-        console.log('🔍 Проверка файла...');
-        const testResponse = await fetch(fileUrl, { method: 'HEAD' });
-        console.log('📊 Статус:', testResponse.status);
-        console.log('📊 Content-Type:', testResponse.headers.get('content-type'));
-        
-        if (!testResponse.ok) {
-            throw new Error(`Файл недоступен (HTTP ${testResponse.status})`);
-        }
+        console.log('🎵 Финальный URL:', fileUrl);
         
         // Создаем аудио
         console.log('🎵 Создание Audio объекта...');
         audio = new Audio(fileUrl);
         
         audio.addEventListener('canplay', () => {
-            console.log('✅ Аудио готово');
+            console.log('✅ Аудио готово к воспроизведению');
             statusEl.textContent = '✅ Готово к воспроизведению';
             playBtn.disabled = false;
             playBtn.textContent = '▶ Играть';
@@ -78,44 +78,51 @@ async function init() {
         });
         
         audio.addEventListener('ended', () => {
-            console.log('⏹️ Завершено');
+            console.log('⏹️ Воспроизведение завершено');
             isPlaying = false;
             playBtn.textContent = '▶ Играть сначала';
         });
         
+        console.log('🔄 Начинаем загрузку аудио...');
         audio.load();
         
     } catch (error) {
-        console.error(' Ошибка:', error);
+        console.error('💥 Критическая ошибка:', error);
         statusEl.textContent = '❌ ' + error.message;
     }
 }
 
+// Обработчик кнопки Play/Pause
 playBtn.addEventListener('click', async () => {
-    console.log('👆 Клик по кнопке');
+    console.log('👆 Клик по кнопке, isPlaying:', isPlaying);
     
     if (!audio) {
-        console.error('❌ Audio не создан');
-        statusEl.textContent = '❌ Аудио не загружено';
+        console.error('❌ Audio объект не создан');
+        statusEl.textContent = ' Аудио не загружено';
         return;
     }
     
     if (isPlaying) {
+        // Пауза
+        console.log(' Пауза');
         audio.pause();
         playBtn.textContent = '▶ Продолжить';
         isPlaying = false;
     } else {
+        // Воспроизведение
+        console.log('▶ Запуск воспроизведения...');
         try {
             await audio.play();
-            playBtn.textContent = '⏸ Пауза';
+            playBtn.textContent = ' Пауза';
             isPlaying = true;
-            console.log('▶ Воспроизведение началось');
+            console.log('✅ Воспроизведение началось');
         } catch (e) {
             console.error('❌ Ошибка play():', e);
-            statusEl.textContent = ' Нажмите ещё раз';
+            statusEl.textContent = '❌ Нажмите ещё раз';
         }
     }
 });
 
-// Запуск
+// Запуск приложения
+console.log(' Инициализация...');
 init();

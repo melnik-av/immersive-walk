@@ -4,8 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Админ-панель</title>
-    <!-- Подключаем библиотеку для QR-кодов -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
     <style>
         * { box-sizing: border-box; }
         body { 
@@ -153,11 +151,16 @@
             border-radius: 12px;
             display: inline-block;
         }
+        .qr-code-container img {
+            display: block;
+            width: 150px;
+            height: 150px;
+        }
         .qr-actions {
             display: flex;
             gap: 10px;
             flex-direction: column;
-            min-width: 150px;
+            min-width: 180px;
         }
         .qr-actions button {
             width: 100%;
@@ -167,7 +170,7 @@
     </style>
 </head>
 <body>
-    <h1>🎛️ Админ-панель</h1>
+    <h1>️ Админ-панель</h1>
     
     <div id="loginForm">
         <h2>Вход</h2>
@@ -213,13 +216,6 @@
     <script type="module">
         import { supabase } from './supabase-config.js';
 
-        // Проверяем что QRCode библиотека загрузилась
-        if (typeof QRCode === 'undefined') {
-            console.error('❌ Библиотека QRCode не загружена!');
-        } else {
-            console.log('✅ Библиотека QRCode загружена');
-        }
-
         // Вход
         window.login = async () => {
             const email = document.getElementById('email').value;
@@ -229,7 +225,7 @@
             
             const { error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) {
-                errorEl.textContent = '❌ ' + error.message;
+                errorEl.textContent = ' ' + error.message;
             }
         };
 
@@ -253,6 +249,11 @@
                 document.getElementById('adminPanel').classList.add('hidden');
             }
         });
+
+        // Функция генерации URL QR-кода через внешний API
+        function getQRUrl(text, size = 200) {
+            return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}&margin=10&color=000000&bgcolor=ffffff`;
+        }
 
         // Загрузка списка треков
         async function loadTracks() {
@@ -279,6 +280,7 @@
                 const descriptionHtml = t.description 
                     ? `<div class="track-description">"${t.description}"</div>` 
                     : '';
+                const qrUrl = getQRUrl(trackLink, 200);
                 
                 return `
                     <div class="track-item">
@@ -290,13 +292,11 @@
                         <div class="qr-section">
                             <div class="qr-label">📱 QR-код для быстрого доступа</div>
                             <div class="qr-wrapper">
-                                <div class="qr-code-container" id="qr-${t.id}">
-                                    <div style="width: 128px; height: 128px; display: flex; align-items: center; justify-content: center; color: #999;">
-                                        Загрузка...
-                                    </div>
+                                <div class="qr-code-container">
+                                    <img src="${qrUrl}" alt="QR-код" id="qr-img-${t.id}" crossorigin="anonymous">
                                 </div>
                                 <div class="qr-actions">
-                                    <button class="btn-qr-download" onclick="downloadQR('${trackLink}', '${t.title.replace(/'/g, "\\'")}')">
+                                    <button class="btn-qr-download" onclick="downloadQR('${qrUrl}', '${t.title.replace(/'/g, "\\'")}')">
                                          Скачать QR
                                     </button>
                                     <button class="btn-copy" onclick="copyLink('${trackLink}', '${t.title.replace(/'/g, "\\'")}')">
@@ -315,35 +315,6 @@
                     </div>
                 `;
             }).join('');
-            
-            // Генерируем QR-коды после того как HTML вставлен
-            setTimeout(() => {
-                tracks.forEach(t => {
-                    const qrContainer = document.getElementById(`qr-${t.id}`);
-                    if (qrContainer && typeof QRCode !== 'undefined') {
-                        try {
-                            QRCode.toCanvas(qrContainer, `${playerUrl}?track=${t.id}`, {
-                                width: 128,
-                                margin: 2,
-                                color: {
-                                    dark: '#000000',
-                                    light: '#ffffff'
-                                }
-                            }, function (error) {
-                                if (error) {
-                                    console.error('Ошибка генерации QR:', error);
-                                    qrContainer.innerHTML = '<div style="color: red; font-size: 12px;">Ошибка</div>';
-                                }
-                            });
-                        } catch (e) {
-                            console.error('Ошибка при создании QR:', e);
-                            qrContainer.innerHTML = '<div style="color: red; font-size: 12px;">Ошибка</div>';
-                        }
-                    } else if (qrContainer) {
-                        qrContainer.innerHTML = '<div style="color: orange; font-size: 12px;">QR библиотека не загружена</div>';
-                    }
-                });
-            }, 100);
         }
 
         // Копирование ссылки
@@ -372,33 +343,23 @@
         };
 
         // Скачать QR-код
-        window.downloadQR = (trackLink, title) => {
-            if (typeof QRCode === 'undefined') {
-                alert('Библиотека QRCode не загружена');
-                return;
-            }
-            
-            const canvas = document.createElement('canvas');
-            QRCode.toCanvas(canvas, trackLink, {
-                width: 256,
-                margin: 2,
-                color: {
-                    dark: '#000000',
-                    light: '#ffffff'
-                }
-            }, function (error) {
-                if (error) {
-                    console.error('Ошибка генерации QR:', error);
-                    alert('Ошибка генерации QR-кода');
-                    return;
-                }
-                
-                const dataUrl = canvas.toDataURL('image/png');
+        window.downloadQR = async (qrUrl, title) => {
+            try {
+                const response = await fetch(qrUrl);
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
                 const link = document.createElement('a');
+                link.href = url;
                 link.download = `QR-${title.replace(/[^a-z0-9а-яё]/gi, '_')}.png`;
-                link.href = dataUrl;
+                document.body.appendChild(link);
                 link.click();
-            });
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Ошибка скачивания:', error);
+                // Fallback: открываем в новой вкладке
+                window.open(qrUrl, '_blank');
+            }
         };
 
         // Переключение активности
@@ -446,7 +407,7 @@
                 return; 
             }
 
-            status.textContent = '⏳ Загрузка файла...';
+            status.textContent = ' Загрузка файла...';
             uploadBtn.disabled = true;
 
             try {
